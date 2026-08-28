@@ -18,4 +18,12 @@ mossdata <- read_delim("moss_data.csv", delim = ',')
 #Renaming the dataset to mossdata
 
 ```
+#**Mean Moss cover vs soil moisture across all four sites: 
+```{r}
+plot(mossdata$`Soil Moisture (unit)`, 
+     mossdata$`% cover`,
+     xlab = "Soil Moisture",
+     ylab = "Moss cover (%)" )
+```
+
 
