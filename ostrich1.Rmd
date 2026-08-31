@@ -27,12 +27,24 @@ mossdata <- read_delim("moss_data.csv", delim = ',')
 #Renaming the dataset to mossdata
 
 ```
-#**Mean Moss cover vs soil moisture across all four sites: 
+#**Mean Moss cover vs soil moisture across all four sites combined: 
 ```{r}
 plot(mossdata$`Soil Moisture (unit)`, 
      mossdata$`% cover`,
      xlab = "Soil Moisture",
      ylab = "Moss cover (%)" )
 ```
+#The data seems to be skewed to the right. 
+```{r}
+shapiro.test(mossdata$`% cover`)
+```
+#The data is NOT normally distributed according to the shapiro-wilk normality test. 
+```{r}
+library(fitdistrplus)
+descdist(mossdata$`% cover`)
+```
 
+#Cullen and Frey graph suggest gamma distribution 
+
+#need to use gamma family for glm, do not forget to omit N/As when using distance from water in models. Look for AIC values of %cover * soil moisture, %cover * zone, %cover * distance from water, and a final model with all interactions. Also look at relationship between distance from water and soil moisture (because some areas were observed to be dryer or wetter than expected). 
 
