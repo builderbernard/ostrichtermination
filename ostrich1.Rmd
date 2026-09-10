@@ -1,14 +1,13 @@
 ---
 title: "ostrichtermination_Test"
-output: html_document
 date: "2026-08-26"
 output: 
-  pdf_document:
-    toc: yes
   html_document:
     df_print: kable
     toc: yes
     toc_float: yes
+  pdf_document:
+    toc: yes
 editor_options:
   chunk_output_type: console
 ---
@@ -28,6 +27,8 @@ mossdata <- read_delim("moss_data.csv", delim = ',')
 
 ```
 #**Mean Moss cover vs soil moisture across all four sites combined: 
+
+#Should we use ggplot here for consistency? I think it works either way
 ```{r}
 plot(mossdata$`Soil Moisture (unit)`, 
      mossdata$`% cover`,
@@ -47,4 +48,266 @@ descdist(mossdata$`% cover`)
 #Cullen and Frey graph suggest gamma distribution 
 
 #need to use gamma family for glm, do not forget to omit N/As when using distance from water in models. Look for AIC values of %cover * soil moisture, %cover * zone, %cover * distance from water, and a final model with all interactions. Also look at relationship between distance from water and soil moisture (because some areas were observed to be dryer or wetter than expected). 
+
+#Cleaning the data and renaming/creating labels, while "N/A" values are treated as missing.
+```{r}
+
+mossdata <- read_csv("moss_data.csv", na = c("N/A", "NA", ""))
+
+moss_clean <- mossdata %>%
+  rename(
+    date = Date,
+    zone = Zone,
+    tree_id = `Tree ID`,
+    distance_water = `Distance from water (m)`,
+    soil_moisture = `Soil Moisture (unit)`,
+    moss_height = `Moss Height (cm)`,
+    moss_width = `Moss Width (cm)`,
+    bhd = `bhd (cm)`,
+    moss_cover = `% cover`,
+    temperature = `Temperature (°C)`
+  )
+
+summary(moss_clean)
+
+```
+
+#Making a water distance subset
+```{r}
+
+moss_distance <- moss_clean %>%
+  drop_na(distance_water)
+
+# Check the number of observations in each dataset.
+nrow(moss_clean)
+nrow(moss_distance)
+
+```
+
+#Exploratory varaibles and graphs + soil moisture and moss cover across all sites
+```{r}
+
+ggplot(moss_clean, aes(x = soil_moisture, y = moss_cover)) +
+  geom_point() +
+  labs(
+    x = "Soil Moisture",
+    y = "Moss Cover (%)"
+  ) +
+  theme_classic()
+
+```
+#Analysis of above: 
+
+
+#Distribution of moss cover
+```{r}
+
+ggplot(moss_clean, aes(x = moss_cover)) +
+  geom_histogram() +
+  labs(
+    x = "Moss Cover (%)",
+    y = "Frequency"
+  ) +
+  theme_classic()
+
+```
+#Analysis of above:
+
+#Soil moisture and moss cover
+```{r} 
+
+model_soil <- glm(
+  moss_cover ~ soil_moisture,
+  data = moss_clean,
+  family = Gamma(link = "log")
+)
+
+summary(model_soil)
+AIC(model_soil)
+
+```
+#Visualizing this model throuhg a scatterplot
+```{r}
+ggplot(moss_clean, aes(x = soil_moisture, y = moss_cover)) +
+  geom_point() +
+  geom_smooth(method = "glm",
+              method.args = list(family = Gamma(link = "log"))) +
+  labs(
+    x = "Soil Moisture",
+    y = "Moss Cover (%)"
+  ) +
+  theme_classic()
+
+```
+
+#Now we need to see what are the differences in moss coverage among each zone
+```{r}
+
+model_zone <- glm(
+  moss_cover ~ zone,
+  data = moss_clean,
+  family = Gamma(link = "log")
+)
+
+summary(model_zone)
+AIC(model_zone)
+
+```
+
+#Visualizing it again
+
+```{r}
+
+ggplot(moss_clean, aes(x = zone, y = moss_cover)) +
+  geom_boxplot() +
+  labs(
+    x = "Sampling Zone",
+    y = "Moss Cover (%)"
+  ) +
+  theme_classic()
+
+```
+
+# Soil moisture + zone model
+```{r}
+
+model_soil_zone <- glm(
+  moss_cover ~ soil_moisture + zone,
+  data = moss_clean,
+  family = Gamma(link = "log")
+)
+
+summary(model_soil_zone)
+AIC(model_soil_zone)
+
+```
+
+#Soil moisture and zone interaction model
+```{r}
+
+model_soil_zone_int <- glm(
+  moss_cover ~ soil_moisture * zone,
+  data = moss_clean,
+  family = Gamma(link = "log")
+)
+
+summary(model_soil_zone_int)
+AIC(model_soil_zone_int)
+
+```
+
+#Now we need to compare all of the models using AIC's
+
+```{r} 
+
+AIC(
+  model_soil,
+  model_zone,
+  model_soil_zone,
+  model_soil_zone_int)
+  
+```
+#Interpertaion: 
+
+#Now we need the distance from water and moss cover
+```{r}
+
+model_distance <- glm(
+  moss_cover ~ distance_water,
+  data = moss_distance,
+  family = Gamma(link = "log")
+)
+
+summary(model_distance)
+AIC(model_distance)
+```
+
+#Another gamma model to visualize
+
+```{r}
+
+ggplot(moss_distance,
+       aes(x = distance_water, y = moss_cover)) +
+  geom_point() +
+  geom_smooth(
+    method = "glm",
+    method.args = list(family = Gamma(link = "log"))
+  ) +
+  labs(
+    x = "Distance From Water (m)",
+    y = "Moss Cover (%)"
+  ) +
+  theme_classic()
+
+```
+#Interpertaion
+
+#Combined distance model containing soil moisture, distance from water, and zone to investigate moss cover
+```{r}
+
+model_distance_full <- glm(
+  moss_cover ~ soil_moisture + distance_water + zone,
+  data = moss_distance,
+  family = Gamma(link = "log"))
+
+summary(model_distance_full)
+AIC(model_distance_full)
+
+```
+
+#almost there but now we wanted to test soil moisture and distance from water
+```{r} 
+
+model_distance_int <- glm(
+  moss_cover ~ soil_moisture * distance_water + zone,
+  data = moss_distance,
+  family = Gamma(link = "log")
+)
+
+summary(model_distance_int)
+AIC(model_distance_int)
+
+```
+#results
+
+
+#testing AICs again
+```{r}
+
+AIC(
+  model_distance,
+  model_distance_full,
+  model_distance_int)
+
+```
+#results
+
+#relationship between soil mouisture and distance from water
+```{r}
+
+model_moisture_distance <- lm(
+  soil_moisture ~ distance_water,
+  data = moss_distance
+)
+
+summary(model_moisture_distance)
+plot(model_moisture_distance)
+
+```
+
+#visualize again
+
+```{r}
+ggplot(moss_distance, aes(x = distance_water, y = soil_moisture)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(
+    x = "Distance From Water (m)",
+    y = "Soil Moisture"
+  ) +
+  theme_classic()
+
+```
+
+#Summary of statistical approach 
 
