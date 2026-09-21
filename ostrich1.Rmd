@@ -16,7 +16,7 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-#**Question: Does soil moisture and distance of tree from water have an effect on moss cover on Trembling Aspen at North and South ASCCA? 
+#**Question: Does soil moisture and distance of tree from water have an effect on moss cover on Trembling Aspen at North and South ASCCA?** 
 ```{r}
 library(tidyverse)
 library(dplyr)
@@ -97,7 +97,7 @@ ggplot(moss_clean, aes(x = soil_moisture, y = moss_cover)) +
 
 ```
 #Analysis of above: 
-
+#The graph portrays moss cover to be skewed to the right. Data does not visually seem to be normally distributed. It would need to be log transformed, most likely. It also VISUALLY represents that there is a limited relationship, no correlation between %cover and soil moisture.  
 
 #Distribution of moss cover
 ```{r}
@@ -111,7 +111,9 @@ ggplot(moss_clean, aes(x = moss_cover)) +
   theme_classic()
 
 ```
-#Analysis of above:
+#Analysis of above: Moss cover on average seems to be ~20% or less of total space coveraage on Aspen tree below the bhd. 
+#In order to model this Log Normal distribution, we can use the Gamma family from GLM. If GLM does not work, we will have to transform the data before the modelling.
+
 
 #Soil moisture and moss cover
 ```{r} 
@@ -126,7 +128,8 @@ summary(model_soil)
 AIC(model_soil)
 
 ```
-#Visualizing this model throuhg a scatterplot
+#p-value is 0.445, soil moisture does NOT significantly explain moss cover. 
+#Visualizing this model through a scatterplot
 ```{r}
 ggplot(moss_clean, aes(x = soil_moisture, y = moss_cover)) +
   geom_point() +
@@ -153,7 +156,7 @@ summary(model_zone)
 AIC(model_zone)
 
 ```
-
+#p value is NOT significant in any zone. South reservoir had the highest moss cover out of all sites. 
 #Visualizing it again
 
 ```{r}
@@ -167,7 +170,7 @@ ggplot(moss_clean, aes(x = zone, y = moss_cover)) +
   theme_classic()
 
 ```
-
+#moss cover is highest near the south reservoir. However, the plots significantly overlap. 
 # Soil moisture + zone model
 ```{r}
 
@@ -181,7 +184,13 @@ summary(model_soil_zone)
 AIC(model_soil_zone)
 
 ```
+#using a tukey because we don't necessarily want just North Forest as our reference group. 
+```{r}
+library(emmeans)
 
+emmeans(model_zone, pairwise ~ zone, adjust = "tukey")
+```
+#Interesting because the most different are South reservoir and North Pond, both are the water sites. 
 #Soil moisture and zone interaction model
 ```{r}
 
@@ -195,7 +204,7 @@ summary(model_soil_zone_int)
 AIC(model_soil_zone_int)
 
 ```
-
+#this model (interaction between soil mositure and zone on moss cover) is similar to the sole effect of zone. 
 #Now we need to compare all of the models using AIC's
 
 ```{r} 
@@ -207,7 +216,7 @@ AIC(
   model_soil_zone_int)
   
 ```
-#Interpertaion: 
+#Interpertaion: the model which includes only the zone is the best predictor for moss cover.
 
 #Now we need the distance from water and moss cover
 ```{r}
@@ -221,7 +230,7 @@ model_distance <- glm(
 summary(model_distance)
 AIC(model_distance)
 ```
-
+#SIGNIFICANT, distance from water 
 #Another gamma model to visualize
 
 ```{r}
@@ -240,6 +249,8 @@ ggplot(moss_distance,
   theme_classic()
 
 ```
+
+
 #Interpertaion
 
 #Combined distance model containing soil moisture, distance from water, and zone to investigate moss cover
@@ -281,8 +292,8 @@ AIC(
 
 ```
 #results
-
-#relationship between soil mouisture and distance from water
+#Combined distance model containing soil moisture, distance from water, and zone to investigate moss cover is the best model for predicting moss cover. 
+#relationship between soil moisture and distance from water
 ```{r}
 
 model_moisture_distance <- lm(
@@ -308,6 +319,33 @@ ggplot(moss_distance, aes(x = distance_water, y = soil_moisture)) +
   theme_classic()
 
 ```
+#Forest vs water adjacent 
+```{r}
+moss_clean <- moss_clean %>%
+  mutate(
+    habitat = case_when(
+      zone %in% c("North Forest", "South Forest") ~ "Forest",
+      zone %in% c("North Pond", "South Reservoir") ~ "Water adjacent",
+      TRUE ~ NA_character_
+    )
+  )
 
+moss_clean$habitat <- factor(
+  moss_clean$habitat,
+  levels = c("Forest", "Water adjacent")
+)
+model_habitat <- glm(
+  moss_cover ~ habitat,
+  data = moss_clean,
+  family = Gamma(link = "log")
+)
+
+summary(model_habitat)
+```
+#not significant 
 #Summary of statistical approach 
 
+
+#soil moisture by itself not significant 
+#zone by itself not significant. South Reservoir highest, South forest lowest.
+#distance from water predcited an increase in moss growth, the farther from water, the more moss cover there was, Could be due to abiotic factors or canopy cover and tree age, since we did not account for tree age. 
