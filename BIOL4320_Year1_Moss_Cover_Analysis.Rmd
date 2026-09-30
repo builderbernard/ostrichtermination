@@ -1,0 +1,362 @@
+---
+title: "Year 1 Analysis of Environmental Drivers of Moss Cover on Trembling Aspen"
+date: "2026-08-26"
+output: 
+  html_document:
+    df_print: kable
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#**Question: Does soil moisture and distance of tree from water have an effect on moss cover on Trembling Aspen at North and South ASCCA?** 
+
+#Loading required libraries and data sets.
+```{r}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+# Loading the dataset
+mossdata <- read_delim("moss_data.csv", delim = ',')
+#Renaming the dataset to mossdata
+
+```
+
+#Moss cover vs. soil moisture across all four sites combined.
+```{r}
+plot(mossdata$`Soil Moisture (unit)`, 
+     mossdata$`% cover`,
+     xlab = "Soil Moisture",
+     ylab = "Moss cover (%)" )
+```
+#Moss cover appears to be right-skewed, with most observations at lower cover values and fewer observations at high cover values.
+
+```{r}
+shapiro.test(mossdata$`% cover`)
+```
+##The Shapiro-Wilk test indicates that moss cover is not normally distributed. 
+
+```{r}
+library(fitdistrplus)
+descdist(mossdata$`% cover`)
+```
+#The Cullen and Frey plot suggests that a Gamma distribution may be appropriate for the positive, right-skewed moss-cover data.
+
+#Because moss cover is positive and right-skewed, Gamma GLMs with a log link will be used. Analyses involving distance from water will use only observations with non-missing distance measurements.
+
+#Cleaning the data and renaming/creating labels, while "N/A" values are treated as missing.
+```{r}
+
+mossdata <- read_csv("moss_data.csv", na = c("N/A", "NA", ""))
+
+moss_clean <- mossdata %>%
+  rename(
+    date = Date,
+    zone = Zone,
+    tree_id = `Tree ID`,
+    distance_water = `Distance from water (m)`,
+    soil_moisture = `Soil Moisture (unit)`,
+    moss_height = `Moss Height (cm)`,
+    moss_width = `Moss Width (cm)`,
+    bhd = `bhd (cm)`,
+    moss_cover = `% cover`,
+    temperature = `Temperature (°C)`
+  )
+
+summary(moss_clean)
+
+```
+#The dataset was cleaned by renaming variables and treating "N/A", "NA", and blank entries as missing values.
+
+#Making a water distance subset.
+```{r}
+
+moss_distance <- moss_clean %>%
+  drop_na(distance_water)
+
+# Check the number of observations in each dataset.
+nrow(moss_clean)
+nrow(moss_distance)
+
+```
+#The full dataset contains 80 trees, while the distance-from-water subset contains 40 trees with available distance measurements.
+
+#Exploratory variables and graphs + soil moisture and moss cover across all sites.
+```{r}
+
+ggplot(moss_clean, aes(x = soil_moisture, y = moss_cover)) +
+  geom_point() +
+  labs(
+    x = "Soil Moisture",
+    y = "Moss Cover (%)"
+  ) +
+  theme_classic()
+
+```
+#The scatterplot shows substantial variation in moss cover across soil-moisture values, with no obvious strong relationship between the two variables.  
+
+#Distribution of moss cover.
+```{r}
+
+ggplot(moss_clean, aes(x = moss_cover)) +
+  geom_histogram() +
+  labs(
+    x = "Moss Cover (%)",
+    y = "Frequency"
+  ) +
+  theme_classic()
+
+```
+#Most trees have relatively low moss cover, while fewer trees have high cover values, producing a right-skewed distribution.
+
+#Because moss cover is positive and right-skewed, a Gamma GLM with a log link is appropriate for the analyses.
+
+#Soil moisture and moss cover.
+```{r} 
+
+model_soil <- glm(
+  moss_cover ~ soil_moisture,
+  data = moss_clean,
+  family = Gamma(link = "log")
+)
+
+summary(model_soil)
+AIC(model_soil)
+
+```
+#Soil moisture was not significantly associated with moss cover (p = 0.445), providing little evidence that soil moisture alone explains variation in moss cover.
+
+#Visualizing this model through a scatterplot.
+```{r}
+ggplot(moss_clean, aes(x = soil_moisture, y = moss_cover)) +
+  geom_point() +
+  geom_smooth(method = "glm",
+              method.args = list(family = Gamma(link = "log"))) +
+  labs(
+    x = "Soil Moisture",
+    y = "Moss Cover (%)"
+  ) +
+  theme_classic()
+
+```
+#The fitted Gamma GLM also shows little change in predicted moss cover across the observed soil-moisture gradient.
+
+#Differences in moss coverage among each sampling zone.
+```{r}
+
+model_zone <- glm(
+  moss_cover ~ zone,
+  data = moss_clean,
+  family = Gamma(link = "log")
+)
+
+summary(model_zone)
+AIC(model_zone)
+
+```
+#No individual zone coefficient differed significantly from the North Forest reference level. However, South Reservoir had the highest observed moss cover.
+
+#Visualizing it again.
+```{r}
+
+ggplot(moss_clean, aes(x = zone, y = moss_cover)) +
+  geom_boxplot() +
+  labs(
+    x = "Sampling Zone",
+    y = "Moss Cover (%)"
+  ) +
+  theme_classic()
+
+```
+#South Reservoir shows the highest observed moss cover, although there is substantial overlap in moss-cover values among the four zones.
+
+#Soil moisture and zone model.
+```{r}
+
+model_soil_zone <- glm(
+  moss_cover ~ soil_moisture + zone,
+  data = moss_clean,
+  family = Gamma(link = "log")
+)
+
+summary(model_soil_zone)
+AIC(model_soil_zone)
+
+```
+#Adding soil moisture to the zone model did not produce a significant soil-moisture effect and provided little improvement over the zone-only model.
+
+#Tukey-adjusted comparisons are used to compare moss cover among all sampling zones. 
+```{r}
+library(emmeans)
+
+emmeans(model_zone, pairwise ~ zone, adjust = "tukey")
+```
+#The Tukey-adjusted comparisons showed that South Reservoir had significantly greater moss cover than North Pond (p = 0.0070), even though both are water-adjacent zones.
+
+#Soil moisture and zone interaction model.
+```{r}
+
+model_soil_zone_int <- glm(
+  moss_cover ~ soil_moisture * zone,
+  data = moss_clean,
+  family = Gamma(link = "log")
+)
+
+summary(model_soil_zone_int)
+AIC(model_soil_zone_int)
+
+```
+#Including an interaction between soil moisture and zone did not provide clear evidence that the effect of soil moisture differed among zones.
+
+#Now we need to compare all of the models using AICs.
+```{r} 
+
+AIC(
+  model_soil,
+  model_zone,
+  model_soil_zone,
+  model_soil_zone_int)
+  
+```
+#The zone-only model had the lowest AIC (457.27), but the soil-moisture-plus-zone model was nearly equivalent (AIC = 457.44; ΔAIC = 0.17). Adding soil moisture therefore provided little improvement in model support.
+
+#Relationship between distance from water and moss cover.
+```{r}
+
+model_distance <- glm(
+  moss_cover ~ distance_water,
+  data = moss_distance,
+  family = Gamma(link = "log")
+)
+
+summary(model_distance)
+AIC(model_distance)
+```
+#Distance from water was significantly associated with moss cover (p = 0.0289). Contrary to our original prediction, moss cover increased as distance from water increased.
+
+#Visualizing the distance-from-water model.
+```{r}
+
+ggplot(moss_distance,
+       aes(x = distance_water, y = moss_cover)) +
+  geom_point() +
+  geom_smooth(
+    method = "glm",
+    method.args = list(family = Gamma(link = "log"))
+  ) +
+  labs(
+    x = "Distance From Water (m)",
+    y = "Moss Cover (%)"
+  ) +
+  theme_classic()
+
+```
+#The fitted Gamma GLM shows the unexpected positive relationship between distance from water and moss cover within the 40-tree subset.
+
+#Combined distance model containing soil moisture, distance from water, and zone to investigate moss cover.
+```{r}
+
+model_distance_full <- glm(
+  moss_cover ~ soil_moisture + distance_water + zone,
+  data = moss_distance,
+  family = Gamma(link = "log"))
+
+summary(model_distance_full)
+AIC(model_distance_full)
+
+```
+#In the additive model, distance from water remained significant (p = 0.00349) and South Reservoir differed significantly from the reference zone (p = 0.00108), while soil moisture was not significant (p = 0.7579).
+
+#Testing the interaction between soil moisture and distance from water.
+```{r} 
+
+model_distance_int <- glm(
+  moss_cover ~ soil_moisture * distance_water + zone,
+  data = moss_distance,
+  family = Gamma(link = "log")
+)
+
+summary(model_distance_int)
+AIC(model_distance_int)
+
+```
+#Adding the soil-moisture-by-distance interaction did not improve the model enough to outperform the simpler additive model.
+
+#Testing AICs again.
+```{r}
+
+AIC(
+  model_distance,
+  model_distance_full,
+  model_distance_int)
+
+```
+#The additive model containing soil moisture, distance from water, and zone had the lowest AIC (233.19) of the three distance-based models. This provides the strongest relative support for the additive model among the models compared.
+
+#Relationship between soil moisture and distance from water.
+```{r}
+
+model_moisture_distance <- lm(
+  soil_moisture ~ distance_water,
+  data = moss_distance
+)
+
+summary(model_moisture_distance)
+plot(model_moisture_distance)
+
+```
+#Soil moisture was not significantly related to distance from water (R² = 0.0175, p = 0.415), indicating that distance explained very little variation in measured soil moisture.
+
+#Visualizing the relationship between soil moisture and distance from water.
+```{r}
+ggplot(moss_distance, aes(x = distance_water, y = soil_moisture)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(
+    x = "Distance From Water (m)",
+    y = "Soil Moisture"
+  ) +
+  theme_classic()
+
+```
+#The scatterplot is consistent with the model result, showing no clear relationship between distance from water and soil moisture.
+
+#Forest vs. water-adjacent habitat model.
+```{r}
+moss_clean <- moss_clean %>%
+  mutate(
+    habitat = case_when(
+      zone %in% c("North Forest", "South Forest") ~ "Forest",
+      zone %in% c("North Pond", "South Reservoir") ~ "Water adjacent",
+      TRUE ~ NA_character_
+    )
+  )
+
+moss_clean$habitat <- factor(
+  moss_clean$habitat,
+  levels = c("Forest", "Water adjacent")
+)
+model_habitat <- glm(
+  moss_cover ~ habitat,
+  data = moss_clean,
+  family = Gamma(link = "log")
+)
+
+summary(model_habitat)
+```
+#Moss cover did not differ significantly between forest and water-adjacent habitats (p = 0.334).
+
+#**Summary of statistical approach** 
+
+#Soil moisture alone was not significantly associated with moss cover, and moss cover did not differ significantly between forest and water-adjacent habitats.
+
+#South Reservoir had the highest observed moss cover, with a significant difference between South Reservoir and North Pond after Tukey adjustment.
+
+#Within the 40-tree distance subset, moss cover unexpectedly increased with distance from water, and this effect remained significant after accounting for soil moisture and zone. This relationship may reflect other unmeasured local factors such as canopy conditions or host-tree characteristics.
